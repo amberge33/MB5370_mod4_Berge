@@ -1,0 +1,69 @@
+---
+title: "Assignment2_QLDSCP_ray_wrangling"
+author: "Amaya Berge"
+date: "2025-09-18"
+output: html_document
+---
+
+### Load necessary packages (comment these out later)
+```{r}
+library(tidyverse)
+library(readr)
+library(dplyr)
+```
+
+### Load dataset
+```{r}
+df <- read.csv("data/QLDSCP_ray.csv")
+```
+
+This dataset is sourced from the Queensland Government's QFISH website (https://qfish.fisheries.qld.gov.au) which gives access to fisheries data of different types. For the purpose of this assignment, I chose catch data from the Queensland Shark Control program. To extract the data of interest, I filtered by species (other since shark didn't allow for rays to be used in the dataset) and then I added the dimensions of species name (name of species caught) and fate (alive or dead). This dataset was then exported from the website to a csv file which I imported into R as shown above for wrangling an analysis.
+
+When first imported, the dataset has the column names as X1, X2, etc with the actual column names and values of interest as rows. The first three rows of the dataset contain important information that will be used as column headers for the catch data (years, species name, and fate). The rest of the rows contain the area (beach) and the catch counts for each species/fate/year combination caught in the QLD Shark Control Program.
+
+# Data wrangling
+```{r}
+#Extract header rows from the dataset to use as column names
+years <- as.character(df[1,])
+species <- as.character(df[2,])
+fate <- as.character(df[3,])
+
+#Build a header dataframe for all columns except the first (Area)
+header_df <- tibble(
+  CalendarYear = years[-1],
+  SpeciesName = species[-1],
+  Fate = fate[-1]
+)
+
+#Extract the data rows (area + counts)
+data_rows <- df[-c(1:3),]
+names(data_rows)[1] <- "Area"
+
+#Pivot counts to long format with column index to assign row values to columns & allow for better visibility of the data (I like long better)
+long_counts <- data_rows %>%
+  pivot_longer(
+    cols = -Area,
+    names_to = "col_index",
+    values_to = "CatchCount"
+  )
+
+#Join the header info to each column index
+##Column indices in header_df correspond to 2:ncol(df)
+##"X." is added to match the format in long_counts and to make the join work
+header_df$col_index <- paste0("X.", 2:(ncol(df)))
+
+#Merge header info to long_counts
+long_final <- long_counts %>%
+  left_join(header_df, by = "col_index")%>%
+  select(Area, CalendarYear, SpeciesName, Fate, CatchCount)
+
+#Remove totals (year total and species name total since they are redundant anc the values can be extracted later if necessary) and convert numeric
+long_final <- long_final %>%
+  filter(!grepl("total", SpeciesName, ignore.case = TRUE)) %>%
+  mutate(CatchCount = as.numeric(CatchCount),
+         CalendarYear = as.numeric(CalendarYear))
+
+#Remove real NAs and text "NA"s from dataset
+long_final_clean <- long_final %>%
+  filter(if_all(everything(), ~ !is.na(.) & . != "NA"))
+```
