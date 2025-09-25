@@ -40,7 +40,7 @@ We will load in the data using a package from the tidyverse called readr. readr 
 ```{r}
 #load the copepod data into R studio
 library(readr)
-dat <- read_csv("data/data-for-course/copepods_raw.csv") #need to change path to include "data" folder in working directory
+dat <- read_csv("../data/data-for-course/copepods_raw.csv") #need to change path to include "data" folder in working directory
 ```
 
 Notice here the silk_id column, which is just the ID for each of the silks, onto which plankton are recorded. 
@@ -184,9 +184,9 @@ We are working with shapefiles in this case study because it is still the most l
 We can read shapefiles directly into R with the st_read command (which is like read_csv, but for spatial files):
 
 ```{r}
-aus <- st_read("data/data-for-course/spatial-data/Aussie/Aussie.shp")
+aus <- st_read("../data/data-for-course/spatial-data/Aussie/Aussie.shp")
 
-shelf <- st_read("data/data-for-course/spatial-data/aus_shelf/aus_shelf.shp")
+shelf <- st_read("../data/data-for-course/spatial-data/aus_shelf/aus_shelf.shp")
 
 #As always check out the data by typing the object names and reviewing the output in the console. Note here that the CRS is provided in the shapefile, it’s already spatially aware.
 
@@ -203,7 +203,7 @@ tm_shape(shelf)+
 Remember we can make a thematic map by layering it up just as we do for plots in ggplot2. Here we have indicated the shape of our map (shelf) and we have added a command bbox = sdat to expand the extent of the map so it depicts all of our copepod data points. We then add the shape of Australia (aus) on top of the shelf, and finally our copepod data (sdat) in the form of points using tm_dots().
 
 ```{r}
-#tm2 <- 
+tm2 <- 
   tm_shape(shelf, bbox = sdat)+
   tm_polygons(col = "lightblue", alpha = 0.3)+
   tm_shape(aus)+
@@ -214,6 +214,8 @@ Remember we can make a thematic map by layering it up just as we do for plots in
   tm_layout(legend.outside = TRUE)+
   #tm_scale_bar(position = c("left", "bottom"), width = 0.15)+ #wasn't working
   tm_compass(position = c("left", "top"), size = 2)
+
+print(tm2)
 
 tmap_save(tm2, filename = "output/Richness-map-with-polygons.jpg", width = 10, height = 8, units = "in", dpi = 300)
 ```
