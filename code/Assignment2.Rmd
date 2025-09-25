@@ -1,0 +1,265 @@
+---
+title: "Assignment2_QLDSCP_ray_wrangling"
+author: "Amaya Berge"
+date: "2025-09-18"
+output: html_document
+---
+
+### Load necessary packages (comment these out later)
+```{r}
+library(tidyverse)
+library(readr)
+library(dplyr)
+library(sf)
+library(tmap)
+library(rnaturalearth)
+library(rnaturalearthdata)
+```
+
+### Load dataset
+```{r}
+df <- read.csv("../data/QLDSCP_ray.csv")
+```
+
+This dataset is sourced from the Queensland Government's QFISH website (https://qfish.fisheries.qld.gov.au) which gives access to fisheries data of different types. For the purpose of this assignment, I chose catch data from the Queensland Shark Control program. To extract the data of interest, I filtered by species (other since shark didn't allow for rays to be used in the dataset) and then I added the dimensions of species name (name of species caught) and fate (alive or dead). This dataset was then exported from the website to a csv file which I imported into R as shown above for wrangling an analysis.
+
+When first imported, the dataset has the column names as X1, X2, etc with the actual column names and values of interest as rows. The first three rows of the dataset contain important information that will be used as column headers for the catch data (years, species name, and fate). The rest of the rows contain the area (beach) and the catch counts for each species/fate/year combination caught in the QLD Shark Control Program.
+
+# Data wrangling
+```{r}
+#Extract header rows from the dataset to use as column names
+years <- as.character(df[1,])
+species <- as.character(df[2,])
+fate <- as.character(df[3,])
+
+#Build a header dataframe for all columns except the first (Area)
+header_df <- tibble(
+  CalendarYear = years[-1],
+  SpeciesName = species[-1],
+  Fate = fate[-1]
+)
+
+#Extract the data rows (area + counts)
+data_rows <- df[-c(1:3),]
+names(data_rows)[1] <- "Area"
+
+#Pivot counts to long format with column index to assign row values to columns & allow for better visibility of the data (I like long better)
+long_counts <- data_rows %>%
+  pivot_longer(
+    cols = -Area,
+    names_to = "col_index",
+    values_to = "CatchCount"
+  )
+
+#Join the header info to each column index
+##Column indices in header_df correspond to 2:ncol(df)
+##"X." is added to match the format in long_counts and to make the join work
+header_df$col_index <- paste0("X.", 2:(ncol(df)))
+
+#Merge header info to long_counts
+long_final <- long_counts %>%
+  left_join(header_df, by = "col_index")%>%
+  select(Area, CalendarYear, SpeciesName, Fate, CatchCount)
+
+#Remove totals (year total and species name total since they are redundant anc the values can be extracted later if necessary) and convert numeric
+long_final <- long_final %>%
+  filter(!grepl("total", SpeciesName, ignore.case = TRUE)) %>%
+  mutate(CatchCount = as.numeric(CatchCount),
+         CalendarYear = as.numeric(CalendarYear))
+
+#Remove real NAs and text "NA"s from dataset
+long_final_clean <- long_final %>%
+  filter(if_all(everything(), ~ !is.na(.) & . != "NA"))
+
+#Found an area called "Grand Total" that I also want to remove
+long_final_clean <- long_final_clean %>%
+  filter(!grepl("Grand Total", Area, ignore.case = TRUE))
+```
+
+Now I have a nice, clean dataset with columns for Area, Calendar Year, Species Name, Fate, and Catch Count. The dataset is in long format which will make it easier to analyze and visualize. I also removed any rows with totals or NAs to ensure the data is clean for analysis.
+
+Next up, I want to generate a figure that tells a compelling story about the data.
+
+# Data visualization
+```{r}
+#Look at total catch over time by area
+long_final_clean %>%
+  group_by(Area, CalendarYear) %>%
+  summarise(TotalCatch = sum(CatchCount, na.rm = TRUE)) %>%
+  ggplot(aes(x = CalendarYear, y = TotalCatch, color = Area)) +
+  facet_wrap(~Area) +
+  geom_line() +
+  geom_point() +
+  labs(x = "Year", y = "Total Catch")
+#this figure, while shows trends over time, isn't great as there are a lot of zero counts at each location over time which isn't great to display a "powerful" message
+
+#Look at species composition by year
+long_final_clean %>%
+  group_by(CalendarYear, SpeciesName) %>%
+  summarise(TotalCatch = sum(CatchCount, na.rm = TRUE)) %>%
+  ggplot(aes(x = CalendarYear, y = TotalCatch, fill = SpeciesName)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(x = "Year", y = "Total Catch", fill = "Species Name") +
+  theme_minimal()
+#This figure shows the species composition of the catch over time which is interesting, but a concern is that the "ray" value is drastically larger than all other species which makes it hard to see trends. Additionally, this value may be a sum of all the other species totals? This did not deprecate from the creation of the dataset but was rather selected for in the filtering of the dataset by species name.
+
+#Look at what species occur where and when --> heatmap
+long_final_clean %>%
+  group_by(Area, CalendarYear, SpeciesName) %>%
+  summarise(TotalCatch = sum(CatchCount, na.rm = TRUE)) %>%
+  ggplot(aes(x = CalendarYear, y = Area, fill = TotalCatch)) +
+  geom_tile(color = "white") +
+  facet_wrap(~SpeciesName, nrow = 6) +
+  scale_fill_viridis_c(option = "C") +
+  labs(x = "Year", y = "Area", fill = "Total Catch")+
+  theme_minimal()
+#This figure shows the distribution of species caught over time and space. This is a more compelling figure as it shows that certain species are more prevalent in certain areas and that some species have been caught more frequently in recent years. This could indicate changes in species distribution or abundance over time. But it is really busy and a lot of the counts are pretty low so it's not the most compelling choice.
+
+#Look at fate of catch by species over time
+long_final_clean %>%
+  group_by(Area, CalendarYear,Fate) %>%
+  summarise(TotalCatch = sum(CatchCount, na.rm = TRUE)) %>%
+  ggplot(aes(x = CalendarYear, y = TotalCatch, fill = Fate)) +
+  geom_col(position = "dodge", stat = "identity") +
+  facet_wrap(~Area) +
+  labs(x = "Year", y = "Proportion")+
+  theme_minimal()
+#This figure shows the fate of the catch over time by area. One thing I have noticed over these figures is that "Ray" has drastically larger counts compared to the identified species. I am wondering if this is a sum of all the other species or if this is just representing unknown rays in the dataset. To be clear, "Ray" was something that was checked in the species name category when I filtered for all ray species before I input it into R.
+
+#Going to filter out "Ray" to show clearer trends in identified ray species
+long_final_clean1 <- long_final_clean %>%
+  filter(SpeciesName != "Ray")
+#I think "Shark Ray" is another unknown species category --> going to filter it out
+long_final_clean1 <- long_final_clean1 %>%
+  filter(SpeciesName != "Shark Ray")
+
+#Try above figure again
+long_final_clean1 %>%
+  group_by(Area, SpeciesName,Fate) %>%
+  #summarise(TotalCatch = sum(CatchCount, na.rm = TRUE)) %>%
+  ggplot(aes(x = CalendarYear, y = CatchCount, fill = Fate)) +
+  geom_col(position = "dodge", stat = "identity") +
+  facet_wrap(~SpeciesName) +
+  labs(x = "Year", y = "Count")+
+  theme_minimal()
+#The counts are just so varied between species so it's hard to see trends. I think I am going to try grouping species together based on characteristics (either by family or by habitat - pelagic vs. demersal)
+
+#Group species by family
+species_fam <- long_final_clean1 %>%
+  mutate(Family = case_when(
+    SpeciesName %in% c("Cownose Ray", "Fantail Ray", "Reticulate Whipray") ~ "Dasyatidae",
+    SpeciesName %in% c("Bull Ray", "Eagle Ray *", "White-Spotted Eagle", "Manta Ray", "Devilray *") ~ "Myliobatidae",
+    SpeciesName %in% c("Green Sawfish", "Narrow Sawfish", "Queensland Sawfish", "Sawfish (Ray)") ~ "Pristidae",
+    SpeciesName %in% c("Stingaree") ~ "Urolophidae",
+    SpeciesName %in% c("Giant guitarfish") ~ "Rhinobatidae",
+    SpeciesName %in% c("Eastern Shovelnosed", "Shovelnosed Ray *", "Giant Shovelnosed R", "White-Spotted Guitar") ~ "Rhinobatidae",
+    TRUE ~ "Other"
+  ))
+
+#Try fate figure again, but now grouped by species
+species_fam %>%
+  group_by(Area, SpeciesName,Fate) %>%
+  #summarise(TotalCatch = sum(CatchCount, na.rm = TRUE)) %>%
+  ggplot(aes(x = CalendarYear, y = CatchCount, fill = Fate)) +
+  geom_col(position = "stack", stat = "identity") +
+  facet_wrap(~Family, scales = "free_y") +
+  scale_fill_manual(values = c(Alive = "#56B4E9", Dead = "#E69F00"))+
+  labs(x = "Year", y = "Count")+
+  theme_minimal()
+
+#Total counts are good, but since I am looking at alive vs. dead, proportions may show better and more simplified trends
+species_fam %>%
+  group_by(Area, SpeciesName,Fate, Family,CalendarYear) %>%
+  summarise(TotalCatch = sum(CatchCount, na.rm = TRUE)) %>%
+  mutate(Proportion = TotalCatch/sum(TotalCatch, na.rm = TRUE)) %>%
+  ggplot(aes(x = CalendarYear, y = Proportion, fill = Fate)) +
+  geom_col(position = "stack") +
+  facet_wrap(~Family) +
+  scale_fill_manual(values = c(Alive = "#56B4E9", Dead = "#E69F00"))+
+  labs(x = "Year", y = "Proportion")+
+  theme_minimal()
+
+##This is a heatmap of total catch of each family over time, this doesn't provide much more information than the bar plots above but is another way to visualize the data (not great because of all the zero counts)
+species_fam %>%
+  group_by(Family, SpeciesName, CalendarYear, Fate) %>%
+  summarise(TotalCatch = sum(CatchCount, na.rm = TRUE)) %>%
+  ggplot(aes(x = CalendarYear, y = SpeciesName, fill = TotalCatch))+
+  geom_tile(color = "white") +
+  facet_wrap(~Family) +
+  scale_fill_viridis_c(option = "C") +
+  labs(x = "Year", y = "Species", fill = "Count")+
+  theme_minimal()
+
+```
+
+## Going to try mapping
+
+While the plots I have already made give interesting information, I think a map may be a more compelling way to show the distribution of ray species caught across Queensland beaches. This could help visualize any spatial patterns in the data. I also want to try out what I have learned about mapping.
+
+```{r}
+#add coordinates for each area
+beach_coords <- tibble(
+  Area = c("Bundaberg", "Cairns", "Capricorn Coast", "Gold Coast", "Mackay", "Nth Strabroke Is.", "Rainbow Beach", "Sunshine Coast North", "Sunshine Coast South", "Sunshine Coast South & Bribie Island", "Townsville"),
+  lat = c(-24.866, -16.918, -23.137, -28.016, -21.141, -27.467, -25.905, -26.650, -26.750, -27.050, -19.258),
+  lon = c(152.350, 145.778, 150.817, 153.400, 149.186, 153.550, 153.100, 153.100, 153.100, 153.150, 146.816)
+)
+
+#join coordinates w/ data
+species_geo <- species_fam %>%
+  left_join(beach_coords, by = "Area") %>%
+  filter(!is.na(lat) & !is.na(lon))
+
+#aggregate total catch per family per area
+ray_map_data <- species_geo %>%
+  group_by(Area, Family, lat, lon, Fate) %>%
+  summarise(TotalCatch = sum(CatchCount, na.rm = TRUE))
+
+#convert to sf object
+ray_map_sf <- st_as_sf(ray_map_data, coords = c("lon", "lat"), crs = 4326)
+
+#load in australia shapefile
+aus <- ne_countries(country = "Australia", scale = "medium", returnclass = "sf")
+#crop to QLD
+qld_bbox <- st_bbox(c(xmin = 138, xmax = 154, ymin = -30, ymax = -10), crs = st_crs(4326))
+aus_qld <- st_crop(aus, qld_bbox)
+
+#urolophidae has very low counts so will filter it out for better visualization
+ray_map_sf_filtered <- ray_map_sf %>%
+  filter(Family != "Urolophidae")
+#pristidae also has low counts
+ray_map_sf_filtered <- ray_map_sf_filtered %>%
+  filter(Family != "Pristidae")
+
+#plot w/ tmap
+tmap_mode("plot")
+
+aus_ray_map <- 
+  tm_shape(aus_qld) +
+  tm_polygons(col = "darkgrey", border.col = "black", alpha = 0.8) +
+tm_shape(ray_map_sf_filtered)+
+  tm_dots(
+    size = "TotalCatch",
+    col = "Family",
+    palette = "Set1",
+    border.col = "black",
+    alpha = 0.7,
+    scale = 1.5
+    )+
+  tm_facets(by = "Family")+
+  tm_layout(
+    legend.outside = TRUE
+  )+
+  tm_compass(position = c("left", "top"), size = 1)
+
+
+tmap_save(aus_ray_map, filename = "../output/Ray-catch-map.jpg", width = 10, height = 8, units = "in", dpi = 300)
+
+print(aus_ray_map)
+```
+
+
+This map illustrates the spatial distribution of ray species caught across Queensland beaches. Each dot represents a beach where rays were captured in nets or on drumlines in the Queensland Shark Control Program, with dot size reflecting total catch count and color indicating the ray family. Facets allow for comparison between different families.
+
+Spatial patterns reveal that catches for Myliobatidae and Rhinobatidae are generally higher at southern locations such as Brisbane, the Sunshine Coast, and the Gold Coast, compared to northern sites. Townsville, the Capricorn Coast, and Bundaberg consistently show lower catches across all families, which may reflect either lower ray abundance due to environmental variables/life history or differences in "effort" (more nets, drumlines, etc).
+
+The Dasyatidae family (e.g. cownose ray, fantail ray) had the lowest catch counts overall, particularly in northern and central areas. Myliobatidae (e.g. bull ray, manta ray) show higher catches, with some peaks in Cairns and the southern latitudes. Rhinobatidae (e.g. shovelnosed rays, giant guitarfhish) display intermediate catch levels, suggesting they may be less abundant or less frequently caught in the areas covered by the shark control program.
