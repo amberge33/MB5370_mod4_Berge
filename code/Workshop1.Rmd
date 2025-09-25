@@ -63,7 +63,6 @@ ggplot(data = mpg) +
   geom_point(mapping = aes(x = displ, y = hwy, colour = class))
 ```
 
-
 # Change point colour by class:
 ```{r}
 ggplot(data = mpg) + 
@@ -76,7 +75,6 @@ ggplot(data = mpg) +
   geom_point(mapping = aes(x = displ, y = hwy, size = class))
 ```
 Note the warning!!!
-
 
 # Change transparency (alpha) by class
 ```{r}
@@ -100,13 +98,7 @@ ggplot(data = mpg) +
   geom_point(mapping = aes(x = displ, y = hwy), color = "blue")
 ```
 
-
 # Troubleshooting 
-
-
-
-
-
 
 # Faceting
 
@@ -118,7 +110,6 @@ ggplot(data = mpg) +
   facet_wrap(~ class, nrow = 2)
 ```
 
-
 ## facet_grid
 A separate facet for each combination of drive-type (e.g. 4WD) * number of cylinders
 ```{r}
@@ -127,7 +118,6 @@ ggplot(data = mpg) +
   facet_grid(drv ~ cyl)
 ```
 Note that there are no occurrences of 5 cylinder 4WDs OR RWD vehicles!
-
 
 ## facet_grid by just row (or column)
 ```{r}
@@ -147,14 +137,12 @@ Read ?facet_wrap. What does nrow do? What does ncol do? What other options contr
 #ncol defines the number of columns of data (number of different graphs) you want to add --> defines the layout of the facets
 ```
 
-
 # Lines
 We already used points:
 ```{r}
 ggplot(data = mpg) + 
   geom_point(mapping = aes(x = displ, y = hwy))
 ```
-
 
 However, ggplot2 can use a variety of geom objects to represent the data. Here, we might want to use bar plots, line charts, boxplots and so on. Well we can handle this issue in ggplot directly using a different geom to plot the same data. Here, instead of plotting points, we will use a smooth line. 
 
@@ -185,7 +173,6 @@ ggplot(data = mpg) +
   geom_smooth(mapping = aes(x = displ, y = hwy, linetype = drv)) # Can also use "lty = " for the same result
 ```
 
-
 # Grouping
 ```{r}
 ggplot(data = mpg) +
@@ -215,7 +202,6 @@ ggplot(data = mpg, mapping = aes(x = displ, y = hwy)) +
   geom_point() + 
   geom_smooth()
 ```
-
 
 # Can still manipulate each geom/layer separately:
 ```{r}
@@ -255,7 +241,6 @@ ggplot(mpg, aes(x = displ, y = hwy, fill = class)) +
 
 ```
 
-
 3.  Will these two graphs look different? Why/why not?
 
 They will not look different. The first graph is using the global mapping of the aesthetics which impacts the aesthetics of all geom in the ggplot. The second graph is doing mapping for each geom but the results should be the same.
@@ -268,7 +253,6 @@ ggplot() +
   geom_point(data = mpg, mapping = aes(x = displ, y = hwy)) + 
   geom_smooth(data = mpg, mapping = aes(x = displ, y = hwy))
 ```
-
 
 # Transformations and stats
 
@@ -302,7 +286,6 @@ demo <- tribble(
 demo
 ```
 
-
 ```{r}
 ggplot(data = demo) +
   geom_bar(mapping = aes(x = cut, y = freq), stat = "identity")
@@ -335,7 +318,6 @@ ggplot(data = diamonds) +
   )
 ```
 
-
 # Aesthetic adjustments adjustments
 Another way to boost the way you can convey information with plots using ggplot2 is to use aesthetics like colour or fill to change aspects of bar colours. We already did this once, but there are multiple options available to you, including changing the fill our outline colours.
 
@@ -359,7 +341,6 @@ ggplot(data = diamonds, mapping = aes(x = color, y = depth)) +
   geom_point(mapping = aes(color = cut)) 
 ```
 
-
 # Filling by a variable
 Now try using these aesthetics to colour by another variable like clarity. Notice how the stacking is done automatically. This is done behind the scenes with a position argument.
 ```{r}
@@ -374,13 +355,11 @@ ggplot(data = diamonds, mapping = aes(x = cut, fill = clarity)) +
   geom_bar(alpha = 1/5, position = "identity")
 ```
 
-
 # To color the bar outlines with no fill color
 ```{r}
 ggplot(data = diamonds, mapping = aes(x = cut, colour = clarity)) + 
   geom_bar(fill = NA, position = "identity")
 ```
-
 
 # Position adjustments
 position = "fill" works like stacking, but makes each set of stacked bars the same height.
@@ -388,8 +367,7 @@ position = "fill" works like stacking, but makes each set of stacked bars the sa
 ggplot(data = diamonds) + 
   geom_bar(mapping = aes(x = cut, fill = clarity), position = "fill")
 ```
-
-
+df <- read.csv("data/QLDSCP_ray.csv")
 # position = "dodge" 
 Places overlapping objects directly beside one another.
 ```{r}
